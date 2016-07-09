@@ -37,6 +37,10 @@ class Chunk {
         node = smgr->addMeshSceneNode(nulmesh);
         node->setPosition(Iv2Fv(p)*16);
     }
+    ~Chunk () {
+        node->remove();
+        
+    }
     blk getBlock(vector3di at) {
         return getBlock(at.X,at.Y,at.Z);
     }
@@ -84,6 +88,7 @@ class Chunk {
             } else {
                 printf("Unknown encoder %c\n", enc);
             }
+            getter.Close();
             setupMeshBuilder();
             return;
         }
@@ -201,6 +206,8 @@ class Chunk {
         mesh->addMeshBuffer(buffer);
         mesh->recalculateBoundingBox();
         node->setMesh(mesh);
+        mesh->drop();
+        buffer->drop();
         node->setMaterialFlag(EMF_LIGHTING, false);
         
         dirty = false;

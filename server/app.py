@@ -138,7 +138,9 @@ while 1:
         try:
             if t == 'png':
                 s.sendall(pong)
+                s.shutdown(socket.SHUT_RDWR)
             if t == 'upd':
+                s.sendall('DONE')
                 update_streams.append(s)
             if t == 'ch@':
                 chunk_getters.append([s,''])
@@ -164,6 +166,7 @@ while 1:
         if ';' in g[1]:
             pos = [int(j) for j in g[1][:-1].split()]
             getChunk(pos).sendTo(g[0])
+            g[0].shutdown(socket.SHUT_RDWR)
             del chunk_getters[i]
             i-=1
         i+=1

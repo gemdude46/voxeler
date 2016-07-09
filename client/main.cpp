@@ -64,7 +64,9 @@ dimension2d<u32> SS;
 
 SMesh* nulmesh;
 
-int RD = 3;
+ISceneNode* playernode;
+
+int RD = 4;
 
 void screenshot(const path save2) {
     driver->writeImageToFile(driver->createScreenShot(), save2); 
@@ -125,9 +127,12 @@ bool connect2Server() {
 
 long tick = 0;
 
+f32 fov = 1.25663706144;
+
 #include "color.cpp"
 #include "chat.cpp"
 
+float sqrt2 = 1.41421356237;
 
 class MyEventReceiver : public IEventReceiver {
 public:
@@ -143,6 +148,16 @@ public:
 			    screenshot("screenshot.png");
 			    camflash = 15;
 			    writeChat("Saved screenshot as \"screenshot.png\"");
+			}
+			
+			if (event.KeyInput.Key==KEY_OEM_4&&event.KeyInput.PressedDown) {
+			    fov-=0.1;
+			    camera->setFOV(fov);
+			}
+			
+			if (event.KeyInput.Key==KEY_OEM_6&&event.KeyInput.PressedDown) {
+			    fov+=0.1;
+			    camera->setFOV(fov);
 			}
 			
 	    }
@@ -220,9 +235,10 @@ int main(){
     driver->beginScene(true, true, SColor(255,255,255,255));
     driver->endScene();
     
-    camera = smgr->addCameraSceneNodeFPS(NULL,100,0.01);
-    camera->setNearValue(0.01);
+    playernode = smgr->addEmptySceneNode();
     
+    camera = smgr->addCameraSceneNodeFPS(playernode,200,0);
+    camera->setNearValue(0.01);
     
     nulmesh = new SMesh();
     
@@ -241,6 +257,10 @@ int main(){
         laggy_server_flag = mesh_builder_flag = false;
         range (i,0,chunks.size()) {
             chunks[i]->doLoad();
+            if(chunks[i]->isLoaded()&&Iv2Fv(chunks[i]->pos-getChunkFromBlock(Fv2Iv(camera->getPosition()))).getLength()>1+RD*sqrt2) {
+                delete chunks[i];
+                chunks.erase(chunks.begin()+i--);
+            }
         }
         
         if (tick % 32 == 0 && connected) {

@@ -12,10 +12,9 @@ public:
     bool Conn(std::string, int);
     bool Send(std::string data);
     std::string Recv(int,bool);
-    /*void setNB() {
-        //ioctl(sock, (int)FIONBIO, (char *)&sk__on);
-        nb=true;
-    }*/
+    void Close(){
+        close(sock);
+    }
     bool peak() {
 
         /// Got here because iSelectReturn > 0 thus data available on at least one descriptor
