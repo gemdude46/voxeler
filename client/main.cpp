@@ -66,6 +66,10 @@ SMesh* nulmesh;
 
 ISceneNode* playernode;
 
+vector3df eye_offset = vector3df(0,1.8,0);
+
+vector3df gravity = vector3df();
+
 int RD = 4;
 
 void screenshot(const path save2) {
@@ -211,8 +215,14 @@ private:
 
 MyEventReceiver* EVTRR;
 
+#define KD(k) EVTRR->IsKeyDown(KEY_##k)
+
 #include "blocks.cpp"
 #include "chunk.cpp"
+
+#include "player.cpp"
+
+Player* player;
 
 int main(){
     
@@ -236,9 +246,12 @@ int main(){
     driver->endScene();
     
     playernode = smgr->addEmptySceneNode();
+    playernode->setPosition(vector3df(0,16,0));
     
-    camera = smgr->addCameraSceneNodeFPS(playernode,200,0);
+    camera = smgr->addCameraSceneNodeFPS(NULL,200,0);
     camera->setNearValue(0.01);
+    
+    player = new Player(playernode);
     
     nulmesh = new SMesh();
     
@@ -251,8 +264,15 @@ int main(){
     connected = connect2Server();
     writeChat(connected?std::string("Connected to ")+HOST+std::string(":")+to_string(PORT):std::string("Unable to connect to server."));
     
+    clock_t lf = clock();
     
     while(1){
+        
+        {
+            clock_t nc = clock();
+            player->tick(((float)(nc-lf))/CLOCKS_PER_SEC);
+            lf = nc;
+        }
         
         laggy_server_flag = mesh_builder_flag = false;
         range (i,0,chunks.size()) {
@@ -268,7 +288,7 @@ int main(){
                 getChunk(vector3di(x,y,z)+getChunkFromBlock(Fv2Iv(camera->getPosition())),true);
             }
         
-            if (upd_s.peak()) {
+            while (upd_s.peak()) {
                 std::string upd = upd_s.Recv(4);
                 printf("UPD %s\n", upd.c_str());
                 
@@ -291,11 +311,17 @@ int main(){
                     std::string blockdata = upd_s.Recv(2, true);
                     setBlockAt(loc, ((blk)blockdata.at(0)) + 256*((blk)blockdata.at(1)));
                 }
+                
+                if (upd == "SETG") {
+                    gravity = vector3df(0,((float)getInt()/256),0);
+                }
             }
         }
         
+        camera->setPosition(playernode->getPosition()+eye_offset);
+        
         SS = driver->getScreenSize();
-    
+        
         driver->beginScene(true, true, SColor(255,0,255,255));
         
         smgr->drawAll();

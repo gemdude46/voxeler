@@ -108,6 +108,16 @@ for i in [str(j) for j in range(10)]:
 
 getChunk((0,0,0))
 
+def setGravity(gv):
+    gravity = gv
+    global_updates.append('SETG')
+    apv(int(gv*256))
+
+def sendSetup(s):
+    s.sendall('SETG')
+    apv(int(gravity*256))
+    s.sendall(global_updates.pop())
+
 listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
@@ -141,6 +151,7 @@ while 1:
                 s.shutdown(socket.SHUT_RDWR)
             if t == 'upd':
                 s.sendall('DONE')
+                sendSetup(s)
                 update_streams.append(s)
             if t == 'ch@':
                 chunk_getters.append([s,''])

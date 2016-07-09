@@ -6,7 +6,7 @@ private:
     int port;
     struct sockaddr_in server;
     bool nb;
-     
+    
 public:
     tcp_client();
     bool Conn(std::string, int);
