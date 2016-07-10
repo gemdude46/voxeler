@@ -37,7 +37,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <sys/ioctl.h>
-
+#include <fstream>
 
 using namespace std;
 using namespace irr;
@@ -48,6 +48,7 @@ using namespace io;
 using namespace gui;
 
 #include "tcp.cpp"
+#include "trim.cpp"
 
 #ifdef _IRR_WINDOWS_
 #pragma comment(lib, "Irrlicht.lib")
@@ -69,8 +70,56 @@ ISceneNode* playernode;
 vector3df eye_offset = vector3df(0,1.8,0);
 
 vector3df gravity = vector3df();
+float jump_power = 0, walk_speed = 0;
 
-int RD = 4;
+int argc;
+char **argv;
+
+std::string readFile(std::string path) {
+    ifstream inf(path.c_str());
+    if (!inf) return std::string();
+    inf.seekg(0, inf.end);
+    int len = inf.tellg();
+    inf.seekg(0, inf.beg);
+    char* buffer = new char[len];
+    inf.read(buffer, len);
+    return std::string(buffer, len);
+}
+
+std::string optfile;
+
+std::string getOpt(std::string opt, std::string def = std::string(), bool allowfile=true) {
+    range(i,1,argc) {
+        std::string arg = argv[i];
+        if (arg == opt) return "true";
+        else {
+            size_t equ = arg.find_first_of('=');
+            if (equ!=std::string::npos && arg.substr(0,equ) == opt) return arg.substr(equ+1);
+        }
+    }
+    if (allowfile) {
+        size_t c = 0;
+        while (true) {
+            size_t nl = optfile.find_first_of('\n', c);
+            std::string line = optfile.substr(c,nl);
+            size_t hpos = line.find_first_of('#');
+            line = line.substr(0,hpos);
+            trim(line);
+            if (line.length()) {
+                if (line == opt) return "true";
+                else {
+                    size_t equ = line.find_first_of('=');
+                    if (equ!=std::string::npos && line.substr(0,equ) == opt) return line.substr(equ+1);
+                }
+            }
+            if (nl == std::string::npos) break;
+            c = nl+1;
+        }
+    }
+    return def;
+}
+
+int RD = 1;
 
 void screenshot(const path save2) {
     driver->writeImageToFile(driver->createScreenShot(), save2); 
@@ -91,7 +140,7 @@ inline int mod_floor(int x, int y) {
 
 
 inline vector3di Fv2Iv(vector3df Fv) {
-    return vector3di(Fv.X,Fv.Y,Fv.Z);
+    return vector3di(floor(Fv.X),floor(Fv.Y),floor(Fv.Z));
 }
 
 inline vector3df Iv2Fv(vector3di Iv) {
@@ -224,16 +273,13 @@ MyEventReceiver* EVTRR;
 
 Player* player;
 
-int main(){
+int main(int _argc, char **_argv){
+    
+    argc = _argc;
+    argv = _argv;
     
     EVTRR = new MyEventReceiver();
     IrrlichtDevice *device = createDevice( video::EDT_OPENGL, dimension2d<u32>(640, 480), 16, false, false, false, EVTRR);
-    
-    //tcp_client sk = tcp_client();
-    //
-    //sk.conn("127.0.0.1", 6660);
-    //sk.send_data("png");
-    //printf("%s\n", sk.receive(65536).c_str());
     
     if (!device) return -1;
     
@@ -245,10 +291,14 @@ int main(){
     driver->beginScene(true, true, SColor(255,255,255,255));
     driver->endScene();
     
+    optfile = readFile(getOpt("options_file", "options.cfg", false));
+    
+    RD = stoi(getOpt("render_distance","4"));
+    
     playernode = smgr->addEmptySceneNode();
     playernode->setPosition(vector3df(0,16,0));
     
-    camera = smgr->addCameraSceneNodeFPS(NULL,200,0);
+    camera = smgr->addCameraSceneNodeFPS(NULL,stoi(getOpt("sensitivity","300")),0);
     camera->setNearValue(0.01);
     
     player = new Player(playernode);
@@ -313,7 +363,15 @@ int main(){
                 }
                 
                 if (upd == "SETG") {
-                    gravity = vector3df(0,((float)getInt()/256),0);
+                    gravity = vector3df(0,((float)getInt())/256,0);
+                }
+                
+                if (upd == "JP=?") {
+                    jump_power = ((float)getInt())/256;
+                }
+                
+                if (upd == "WS=?") {
+                    walk_speed = ((float)getInt())/256;
                 }
             }
         }
@@ -321,6 +379,8 @@ int main(){
         camera->setPosition(playernode->getPosition()+eye_offset);
         
         SS = driver->getScreenSize();
+        
+        camera->setAspectRatio(SS.Width/(float)SS.Height);
         
         driver->beginScene(true, true, SColor(255,0,255,255));
         

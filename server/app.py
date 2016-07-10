@@ -117,6 +117,12 @@ def sendSetup(s):
     s.sendall('SETG')
     apv(int(gravity*256))
     s.sendall(global_updates.pop())
+    s.sendall('JP=?')
+    apv(1152);
+    s.sendall(global_updates.pop())
+    s.sendall('WS=?')
+    apv(1024);
+    s.sendall(global_updates.pop())
 
 listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
