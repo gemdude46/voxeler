@@ -1,24 +1,3 @@
-/*
-    
-    SMesh* mesh = new SMesh();
-    SMeshBuffer* buffer = new SMeshBuffer();
-    
-    S3DVertex verticies[3];
-    verticies[0] = S3DVertex(0,0,0 , 0,0,1 , SColor(255,255,0,0) , 0,0);
-    verticies[1] = S3DVertex(0,1,0 , 0,1,1 , SColor(255,0,255,0) , 0,0);
-    verticies[2] = S3DVertex(1,0,0 , 1,0,1 , SColor(255,0,0,255) , 0,0);
-    
-    u16 indices[6] = {0,1,2};
-    buffer->append(verticies, 3, indices, 3);
-    
-    mesh->addMeshBuffer(buffer);
-    IMeshSceneNode* mnode = smgr->addMeshSceneNode(mesh), *cnode = smgr->addCubeSceneNode(1);
-    mnode->setMaterialFlag(EMF_LIGHTING, false);
-    cnode->setPosition(vector3df(0,2,0));
-    mnode->setPosition(vector3df(0,0,0));
-    
-*/
-
 #include <irrlicht.h>
 #include <vector>
 #include <iostream>
@@ -57,6 +36,8 @@ using namespace gui;
 
 #define blk u16
 
+bool debug = true;
+
 IVideoDriver* driver;
 ICameraSceneNode* camera;
 ISceneManager* smgr;
@@ -71,6 +52,7 @@ vector3df eye_offset = vector3df(0,1.8,0);
 
 vector3df gravity = vector3df();
 float jump_power = 0, walk_speed = 0;
+vector3df fric = vector3df(0.7,0.9,0.7);
 
 int argc;
 char **argv;
@@ -157,11 +139,11 @@ bool connected = false;
 tcp_client upd_s;
 
 int getInt(){
-    int i = 0;
+    s32 i = 0;
     std::string intdat = upd_s.Recv(4, true);
-    i += intdat.at(0);
-    i += intdat.at(1) * 256;
-    i += intdat.at(2) * 65536;
+    i += ((s32) (unsigned char) intdat.at(0));
+    i += ((s32) (unsigned char) intdat.at(1)) * 256;
+    i += ((s32) (unsigned char) intdat.at(2)) * 65536;
     if (intdat.at(3) == '-') i = -i;
     return i;
 }
@@ -171,6 +153,7 @@ bool connect2Server() {
         upd_s = tcp_client();
         upd_s.Conn(HOST, PORT);
         upd_s.Send("upd");
+        
     } catch (...) {
         return false;
     }
@@ -190,7 +173,7 @@ float sqrt2 = 1.41421356237;
 class MyEventReceiver : public IEventReceiver {
 public:
 	// This is the one method that we have to implement
-	bool LB, RB;
+	bool LB, RB, JPLB;
 	virtual bool OnEvent(const SEvent& event)
 	{
 		// Remember whether each key is down or up
@@ -220,6 +203,7 @@ public:
             {
             case EMIE_LMOUSE_PRESSED_DOWN:
                 LB = true;
+                JPLB = true;
                 break;
 
             case EMIE_LMOUSE_LEFT_UP:
@@ -255,6 +239,7 @@ public:
 			KeyIsDown[i] = false;
 	    LB=false;
 	    RB=false;
+	    JPLB = false;
 	}
 
 
@@ -269,11 +254,13 @@ MyEventReceiver* EVTRR;
 #include "blocks.cpp"
 #include "chunk.cpp"
 
+#include "particle.cpp"
+
 #include "player.cpp"
 
 Player* player;
 
-int main(int _argc, char **_argv){
+int pgrm(int _argc, char **_argv){
     
     argc = _argc;
     argv = _argv;
@@ -305,11 +292,12 @@ int main(int _argc, char **_argv){
     
     nulmesh = new SMesh();
     
+    IMeshSceneNode* select_o_cube = smgr->addCubeSceneNode(1.1);
+    select_o_cube->setMaterialFlag(EMF_LIGHTING, false);
+    select_o_cube->setVisible(false);
     
     range(i,0,max_msgs) chat[i]=std::string();
     font = driver->getTexture("images/fonts/ascii.png");
-    
-    //range(x,-1,2) range(y,-1,2) range(z,-1,2) new Chunk(vector3di(x,y,z));
     
     connected = connect2Server();
     writeChat(connected?std::string("Connected to ")+HOST+std::string(":")+to_string(PORT):std::string("Unable to connect to server."));
@@ -320,7 +308,14 @@ int main(int _argc, char **_argv){
         
         {
             clock_t nc = clock();
-            player->tick(((float)(nc-lf))/CLOCKS_PER_SEC);
+            float t_t = ((float)(nc-lf))/CLOCKS_PER_SEC;
+            player->tick(t_t);
+            for (int i = particles.size() - 1; i >= 0; i--) {
+                if (!particles[i]->tick(t_t)) {
+                    delete particles[i];
+                    particles.erase(particles.begin()+i);
+                }
+            }
             lf = nc;
         }
         
@@ -333,13 +328,13 @@ int main(int _argc, char **_argv){
             }
         }
         
-        if (tick % 32 == 0 && connected) {
+        if (tick % 8 == 0 && connected) {
             range(x,-RD,1+RD) range(y,-RD,1+RD) range(z,-RD,1+RD) {
                 getChunk(vector3di(x,y,z)+getChunkFromBlock(Fv2Iv(camera->getPosition())),true);
             }
         
             while (upd_s.peak()) {
-                std::string upd = upd_s.Recv(4);
+                std::string upd = upd_s.Recv(4, true);
                 printf("UPD %s\n", upd.c_str());
                 
                 if (upd == "CHAT") {
@@ -362,6 +357,23 @@ int main(int _argc, char **_argv){
                     setBlockAt(loc, ((blk)blockdata.at(0)) + 256*((blk)blockdata.at(1)));
                 }
                 
+                if (upd == "PART") {
+                    int a,b,c,d,e,f,g,h,i,j,k;
+                    a = getInt();
+                    b = getInt();
+                    c = getInt();
+                    d = getInt();
+                    e = getInt();
+                    f = getInt();
+                    g = getInt();
+                    h = getInt();
+                    i = getInt();
+                    j = getInt();
+                    k = getInt();
+                    
+                    particles.push_back(new Particle(a,b,c,d,e,f,g,h,i,j,k));
+                }
+                
                 if (upd == "SETG") {
                     gravity = vector3df(0,((float)getInt())/256,0);
                 }
@@ -373,14 +385,65 @@ int main(int _argc, char **_argv){
                 if (upd == "WS=?") {
                     walk_speed = ((float)getInt())/256;
                 }
+                
+                if (upd == "MOV2") {
+                    player->position.X = getInt();
+                    player->position.Y = getInt();
+                    player->position.Z = getInt();
+                }
             }
+            
+            upd_s.Send("@");
+            upd_s.Send(to_string(player->position.X));
+            upd_s.Send(";");
+            upd_s.Send(to_string(player->position.Y));
+            upd_s.Send(";");
+            upd_s.Send(to_string(player->position.Z));
+            upd_s.Send(";");
         }
         
         camera->setPosition(playernode->getPosition()+eye_offset);
         
+        vector3df ray = camera->getRotation().rotationToDirection().setLength(0.1);
+        vector3df raypos = camera->getPosition();
+        vector3di orp = vector3di();
+        bool selected = false, s_moved = false;
+        for (int i = 0; i < 50; i++) {
+            raypos += ray;
+            if (orp != Fv2Iv(raypos)) {
+                orp = Fv2Iv(raypos);
+                if (BT_select[B_type[getBlockAt(orp)]]) {
+                    vector3df newp = Iv2Fv(orp)+vector3df(0.5,0.5,0.5);
+                    if (newp != select_o_cube->getPosition()) {
+                        select_o_cube->setVisible(true);
+                        select_o_cube->setPosition(Iv2Fv(orp)+vector3df(0.5,0.5,0.5));
+                        s_moved = true;
+                    }
+                    selected = true;
+                    break;
+                }
+            }
+            if (i == 49) {
+                select_o_cube->setVisible(false);
+                select_o_cube->setPosition(vector3df());
+            }
+        }
+        if ((EVTRR->LB && s_moved) || (EVTRR->JPLB && selected)) {
+            upd_s.Send("b");
+            upd_s.Send(to_string(orp.X));
+            upd_s.Send(";");
+            upd_s.Send(to_string(orp.Y));
+            upd_s.Send(";");
+            upd_s.Send(to_string(orp.Z));
+            upd_s.Send(";");
+        }
+        
+        
         SS = driver->getScreenSize();
         
         camera->setAspectRatio(SS.Width/(float)SS.Height);
+        
+        EVTRR->JPLB = false;
         
         driver->beginScene(true, true, SColor(255,0,255,255));
         
@@ -394,6 +457,12 @@ int main(int _argc, char **_argv){
             camflash--;
         }
         
+        if (debug) {
+            drawText("X: " + to_string(player->position.X), position2d<s32>(12,12));
+            drawText("Y: " + to_string(player->position.Y), position2d<s32>(12,30));
+            drawText("Z: " + to_string(player->position.Z), position2d<s32>(12,48));
+        }
+        
         driver->endScene();
         if (!device->run()) break;
         
@@ -403,4 +472,12 @@ int main(int _argc, char **_argv){
     device->drop();
     
     return 0;
+}
+
+int main(int a, char** b) {
+    try {
+        pgrm(a, b);
+    } catch (char const* c) {
+        cout << c << endl;
+    }
 }
