@@ -332,10 +332,13 @@ int pgrm(int _argc, char **_argv){
             range(x,-RD,1+RD) range(y,-RD,1+RD) range(z,-RD,1+RD) {
                 getChunk(vector3di(x,y,z)+getChunkFromBlock(Fv2Iv(camera->getPosition())),true);
             }
-        
+            
+            bool got_upd = false;
+            
             while (upd_s.peak()) {
                 std::string upd = upd_s.Recv(4, true);
-                printf("UPD %s\n", upd.c_str());
+                
+                got_upd = true;
                 
                 if (upd == "CHAT") {
                     char len = upd_s.Recv(1).at(0);
@@ -393,13 +396,15 @@ int pgrm(int _argc, char **_argv){
                 }
             }
             
-            upd_s.Send("@");
-            upd_s.Send(to_string(player->position.X));
-            upd_s.Send(";");
-            upd_s.Send(to_string(player->position.Y));
-            upd_s.Send(";");
-            upd_s.Send(to_string(player->position.Z));
-            upd_s.Send(";");
+            if (got_upd) {
+                upd_s.Send("@");
+                upd_s.Send(to_string(player->position.X));
+                upd_s.Send(";");
+                upd_s.Send(to_string(player->position.Y));
+                upd_s.Send(";");
+                upd_s.Send(to_string(player->position.Z));
+                upd_s.Send(";");
+            }
         }
         
         camera->setPosition(playernode->getPosition()+eye_offset);

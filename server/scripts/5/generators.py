@@ -1,19 +1,24 @@
 import random, noise
 
-cross_seed = random.randint(-2000000000, 2000000000)+0.5
-
-#print('CrossSeed: '+str(cross_seed))
+seed = random.randint(-9999999, 9999999)
 
 def generate_world_normal(ch):
+    cross_seed = seed + 0.5
     for i in range(16):
         for j in range(16):
-            h = noise.pnoise3(i/1024.+ch.pos[0]/64.,j/1024.+ch.pos[2]/64.,cross_seed,3)*128
+            h = noise.pnoise3(i/1024.+ch.pos[0]/64.,j/1024.+ch.pos[2]/64.,cross_seed,3)*360
             for A in range(16):
                 a = A+ch.pos[1]*16
                 if h > 1:
-                    if a < h-5: ch.setBlock((i,A,j), 1)
-                    elif a < h: ch.setBlock((i,A,j), 2)
-                    elif a<1+h: ch.setBlock((i,A,j), 3)
+                    if noise.snoise4(
+                        i/64. + ch.pos[0]/4.,
+                        a/64.,
+                        j/64. + ch.pos[2]/4.,
+                        cross_seed
+                    ) < 0.6:
+                        if a < h-5: ch.setBlock((i,A,j), 1)
+                        elif a < h: ch.setBlock((i,A,j), 2)
+                        elif a<1+h: ch.setBlock((i,A,j), 3)
                 else:
                     if a < h-5: ch.setBlock((i,A,j), 1)
                     elif a<1+h: ch.setBlock((i,A,j), 4)
